@@ -1,0 +1,27 @@
+# LLM Generation Provider Configuration for Document RAG Engine
+default_provider: "gemini"  # gemini | ollama | openai
+
+providers:
+  gemini:
+    model: "gemini-2.5-flash"
+    temperature: 0.0
+    max_tokens: 2048
+
+  ollama:
+    model: "deepseek-r1:8b"
+    base_url: "http://localhost:11434"
+    temperature: 0.0
+    max_tokens: 4096
+
+  openai:
+    model: "gpt-4o-mini"
+    temperature: 0.0
+    max_tokens: 2048
+
+inference_modes:
+  fast:
+    system_prompt_type: "strict"
+    coarse_k_multiplier: 2
+  thinking:
+    system_prompt_type: "thinking_cot"
+    coarse_k_multiplier: 3

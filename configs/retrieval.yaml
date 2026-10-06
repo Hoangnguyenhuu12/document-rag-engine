@@ -1,0 +1,21 @@
+# Retrieval & Reranker Configuration for Document RAG Engine
+vector_store:
+  backend: "chroma"
+  persist_directory: "data/chroma_db"
+  collection_name: "rag_knowledge_base"
+
+retrieval:
+  top_k: 4
+  coarse_k: 12
+  enable_reranker: true
+  enable_cross_lingual: true
+
+reranker:
+  semantic_weight: 0.5
+  lexical_bm25_weight: 0.3
+  rrf_weight: 0.2
+
+chunking:
+  parent_size: 1200
+  child_size: 400
+  child_overlap: 0

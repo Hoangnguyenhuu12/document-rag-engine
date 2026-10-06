@@ -1,0 +1,19 @@
+# Embedding Provider Configuration for Document RAG Engine
+default_provider: "ollama"  # ollama | gemini | openai
+
+providers:
+  ollama:
+    model: "nomic-embed-text"
+    base_url: "http://localhost:11434"
+    dimension: 768
+    batch_size: 50
+
+  gemini:
+    model: "models/gemini-embedding-2"
+    dimension: 768
+    batch_size: 40
+
+  openai:
+    model: "text-embedding-3-small"
+    dimension: 1536
+    batch_size: 50
