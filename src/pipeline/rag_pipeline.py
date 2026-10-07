@@ -15,6 +15,7 @@ from ..schemas.rag_contracts import (
     Citation,
     RAGQueryRequest,
     RAGQueryResponse,
+    RAGEvaluationResult,
 )
 from ..ingestion.document_loader import RAGDocumentLoader
 from ..chunking.chunker import StructureAwareChunker
@@ -22,6 +23,7 @@ from ..embeddings.embedding_provider import BaseEmbeddingProvider, EmbeddingFact
 from ..retrieval.vector_store import VectorStoreManager
 from ..retrieval.retriever import HybridRetriever
 from ..generation.llm_provider import BaseLLMProvider, LLMFactory
+from ..evaluation.rag_triad import RAGTriadEvaluator
 
 STRICT_RAG_SYSTEM_PROMPT = """\
 Bạn là trợ lý AI chuyên nghiệp về khai thác tri thức tài liệu (Document Intelligence Assistant).
@@ -66,6 +68,7 @@ class DocumentRAGPipeline:
         )
         self.chunker = chunker or StructureAwareChunker()
         self.loader = RAGDocumentLoader()
+        self.evaluator = RAGTriadEvaluator()
 
     @classmethod
     def from_configs(
@@ -99,11 +102,17 @@ class DocumentRAGPipeline:
         )
 
         r_cfg = ret_cfg.get("retrieval", {})
+        rerank_cfg = ret_cfg.get("reranker", {})
         retriever = HybridRetriever(
             vector_store=v_store,
             embedding_provider=emb_provider,
             top_k=r_cfg.get("top_k", 4),
-            coarse_k=r_cfg.get("coarse_k", 12)
+            coarse_k=r_cfg.get("coarse_k", 12),
+            semantic_weight=rerank_cfg.get("semantic_weight", 0.5),
+            lexical_weight=rerank_cfg.get("lexical_bm25_weight", 0.3),
+            rrf_weight=rerank_cfg.get("rrf_weight", 0.2),
+            bm25_k1=rerank_cfg.get("bm25_k1", 1.5),
+            bm25_b=rerank_cfg.get("bm25_b", 0.75)
         )
 
         c_cfg = ret_cfg.get("chunking", {})
@@ -160,6 +169,18 @@ class DocumentRAGPipeline:
             "total_pages": doc.total_pages,
             "chunks_indexed": n_chunks
         }
+
+    def list_documents(self) -> List[Dict[str, Any]]:
+        """List distinct documents and their chunk counts indexed in the vector store."""
+        return self.vector_store.list_indexed_documents(self.embedding_provider.dimension)
+
+    def delete_document(self, file_name: str) -> bool:
+        """Delete all chunks of a specific document by file_name."""
+        return self.vector_store.delete_document(file_name, self.embedding_provider.dimension)
+
+    def clear_all_documents(self) -> bool:
+        """Delete the entire collection and clear all documents."""
+        return self.vector_store.clear_all_documents(self.embedding_provider.dimension)
 
     def _build_prompt(self, query: str, citations: List[Citation], conversation_history: Optional[List[Dict[str, str]]] = None) -> str:
         """Construct prompt with context blocks and optional chat history."""
@@ -219,13 +240,37 @@ class DocumentRAGPipeline:
 
         latency = time.time() - start_time
 
+        eval_result = None
+        if request.evaluate:
+            eval_result = self.evaluator.evaluate(
+                query=request.query,
+                answer=answer,
+                citations=citations
+            )
+
         return RAGQueryResponse(
             answer=answer,
             citations=citations,
             mode=request.mode,
             model_used=self.llm_provider.model_name,
-            latency_seconds=round(latency, 2)
+            latency_seconds=round(latency, 2),
+            evaluation=eval_result
         )
+
+    def evaluate_response(
+        self,
+        query: str,
+        response: RAGQueryResponse
+    ) -> RAGEvaluationResult:
+        """Evaluate an existing query response using RAG Triad."""
+        eval_res = self.evaluator.evaluate(
+            query=query,
+            answer=response.answer,
+            citations=response.citations
+        )
+        response.evaluation = eval_res
+        return eval_res
+
 
     def stream_query(
         self,

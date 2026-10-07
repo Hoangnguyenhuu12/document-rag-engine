@@ -58,6 +58,16 @@ class RAGQueryRequest(BaseModel):
     mode: str = Field(default="fast", description="'fast' or 'thinking'")
     filter_doc_name: Optional[str] = None
     conversation_history: List[Dict[str, str]] = Field(default_factory=list)
+    evaluate: bool = Field(default=False, description="Run RAG Triad evaluation on answer and citations")
+
+
+class RAGEvaluationResult(BaseModel):
+    """Evaluation score breakdown for a single RAG transaction (RAG Triad)."""
+    context_relevance: float = Field(ge=0.0, le=1.0, description="Relevance of citations to query")
+    groundedness: float = Field(ge=0.0, le=1.0, description="Faithfulness of answer to citations (anti-hallucination)")
+    answer_relevance: float = Field(ge=0.0, le=1.0, description="Relevance of answer to user query")
+    overall_score: float = Field(ge=0.0, le=1.0, description="Harmonic average of the triad")
+    details: Dict[str, Any] = Field(default_factory=dict)
 
 
 class RAGQueryResponse(BaseModel):
@@ -68,3 +78,5 @@ class RAGQueryResponse(BaseModel):
     model_used: str = ""
     thinking_trace: Optional[str] = None
     latency_seconds: float = 0.0
+    evaluation: Optional[RAGEvaluationResult] = None
+
