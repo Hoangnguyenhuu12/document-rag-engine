@@ -14,6 +14,9 @@ reranker:
   semantic_weight: 0.5
   lexical_bm25_weight: 0.3
   rrf_weight: 0.2
+  bm25_k1: 1.5
+  bm25_b: 0.75
+
 
 chunking:
   parent_size: 1200
