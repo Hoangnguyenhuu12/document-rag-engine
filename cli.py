@@ -67,7 +67,8 @@ def handle_query(args):
     request = RAGQueryRequest(
         query=args.question,
         top_k=args.top_k,
-        mode=args.mode
+        mode=args.mode,
+        evaluate=getattr(args, "evaluate", False)
     )
     response = pipeline.query(request)
 
@@ -80,6 +81,56 @@ def handle_query(args):
         for i, c in enumerate(response.citations):
             print(f"[{i+1}] {c.doc_name} - {c.location_label} (Score: {c.score})")
             print(f"    \"{c.text_snippet[:150]}...\"\n")
+
+    if response.evaluation:
+        ev = response.evaluation
+        print("--- ĐÁNH GIÁ CHẤT LƯỢNG (RAG TRIAD) ---")
+        print(f"• Context Relevance (Độ liên quan ngữ cảnh): {ev.context_relevance * 100:.1f}%")
+        print(f"• Groundedness (Tính trung thực/chống ảo giác): {ev.groundedness * 100:.1f}%")
+        print(f"• Answer Relevance (Độ phù hợp câu trả lời): {ev.answer_relevance * 100:.1f}%")
+        print(f"• Overall Triad Score: {ev.overall_score * 100:.1f}%\n")
+
+
+
+def handle_list(args):
+    pipeline = get_pipeline()
+    docs = pipeline.list_documents()
+    print(f"\n--- DANH SÁCH TÀI LIỆU TRONG KHO (Tổng: {len(docs)}) ---")
+    if not docs:
+        print("Chưa có tài liệu nào được nạp vào kho tri thức.")
+        return
+    for i, d in enumerate(docs, 1):
+        print(f"[{i}] {d['file_name']} (Số chunk: {d['chunk_count']})")
+    print()
+
+
+def handle_delete(args):
+    pipeline = get_pipeline()
+    target = args.file_name
+    print(f"Đang xóa tài liệu '{target}' khỏi kho tri thức...")
+    success = pipeline.delete_document(target)
+    if success:
+        print(f"Đã xóa thành công tài liệu '{target}'.")
+    else:
+        print(f"Không thể xóa hoặc không tìm thấy tài liệu '{target}'.", file=sys.stderr)
+        sys.exit(1)
+
+
+def handle_clear(args):
+    if not args.force:
+        confirm = input("CẢNH BÁO: Thao tác này sẽ xóa toàn bộ kho tri thức. Bạn có chắc không? (y/N): ")
+        if confirm.lower() != "y":
+            print("Đã hủy thao tác.")
+            return
+
+    pipeline = get_pipeline()
+    print("Đang dọn sạch toàn bộ kho tri thức...")
+    success = pipeline.clear_all_documents()
+    if success:
+        print("Đã dọn sạch toàn bộ kho tri thức thành công.")
+    else:
+        print("Lỗi khi dọn dẹp kho tri thức.", file=sys.stderr)
+        sys.exit(1)
 
 
 def main():
@@ -96,6 +147,19 @@ def main():
     query_parser.add_argument("question", type=str, help="User query text")
     query_parser.add_argument("--top-k", type=int, default=4, help="Number of citations to retrieve")
     query_parser.add_argument("--mode", choices=["fast", "thinking"], default="fast", help="Inference mode")
+    query_parser.add_argument("--eval", dest="evaluate", action="store_true", help="Run RAG Triad evaluation")
+
+
+    # List command
+    subparsers.add_parser("list", help="List all indexed documents in the knowledge base")
+
+    # Delete command
+    delete_parser = subparsers.add_parser("delete", help="Delete a specific document from the knowledge base")
+    delete_parser.add_argument("file_name", type=str, help="File name of the document to delete")
+
+    # Clear command
+    clear_parser = subparsers.add_parser("clear", help="Clear all documents from the knowledge base")
+    clear_parser.add_argument("--force", "-f", action="store_true", help="Skip confirmation prompt")
 
     args = parser.parse_args()
 
@@ -103,6 +167,13 @@ def main():
         handle_index(args)
     elif args.command == "query":
         handle_query(args)
+    elif args.command == "list":
+        handle_list(args)
+    elif args.command == "delete":
+        handle_delete(args)
+    elif args.command == "clear":
+        handle_clear(args)
+
 
 
 if __name__ == "__main__":

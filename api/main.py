@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse, HTMLResponse
 from pydantic import BaseModel, Field
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -58,6 +58,8 @@ class QueryRequest(BaseModel):
     mode: str = Field(default="fast", description="'fast' or 'thinking'")
     filter_doc_name: Optional[str] = None
     chat_history: Optional[List[Dict[str, str]]] = None
+    evaluate: bool = Field(default=False, description="Run RAG Triad evaluation on answer and citations")
+
 
 
 class IndexOCRRequest(BaseModel):
@@ -68,6 +70,19 @@ class IndexOCRRequest(BaseModel):
 @app.get("/health")
 def health():
     return {"status": "healthy", "service": "document-rag-engine"}
+
+
+@app.get("/", response_class=FileResponse)
+@app.get("/ui", response_class=FileResponse)
+def serve_ui():
+    """
+    Serve the Document RAG Engine Web UI Studio.
+    """
+    ui_path = BASE_DIR / "ui" / "index.html"
+    if ui_path.exists():
+        return FileResponse(ui_path)
+    return HTMLResponse("<h3>Document RAG Engine is running. Visit /docs for Swagger API.</h3>")
+
 
 
 @app.post("/rag/index")
@@ -111,6 +126,41 @@ async def index_ocr(request: IndexOCRRequest):
     return result
 
 
+@app.get("/rag/documents")
+def list_documents():
+    """
+    List all indexed documents and their chunk counts.
+    """
+    pipe = get_pipeline()
+    docs = pipe.list_documents()
+    return {"documents": docs, "total_documents": len(docs)}
+
+
+@app.delete("/rag/documents/{file_name}")
+def delete_document(file_name: str):
+    """
+    Delete all chunks belonging to a specific document.
+    """
+    pipe = get_pipeline()
+    success = pipe.delete_document(file_name)
+    if not success:
+        raise HTTPException(status_code=404, detail=f"Failed to delete or document not found: {file_name}")
+    return {"status": "success", "message": f"Deleted document '{file_name}'"}
+
+
+@app.delete("/rag/documents")
+def clear_all_documents():
+    """
+    Clear all documents and chunks from the knowledge base.
+    """
+    pipe = get_pipeline()
+    success = pipe.clear_all_documents()
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to clear knowledge base collection.")
+    return {"status": "success", "message": "All documents cleared from knowledge base."}
+
+
+
 @app.post("/rag/query")
 async def query_rag(request: QueryRequest):
     """
@@ -122,7 +172,8 @@ async def query_rag(request: QueryRequest):
         top_k=request.top_k,
         mode=request.mode,
         filter_doc_name=request.filter_doc_name,
-        conversation_history=request.chat_history or []
+        conversation_history=request.chat_history or [],
+        evaluate=request.evaluate
     )
     result = pipe.query(rag_request)
     return result

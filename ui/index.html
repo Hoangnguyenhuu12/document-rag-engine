@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document RAG Engine - Studio Trí Tuệ Tài Liệu</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0e17;
+            --bg-secondary: #111827;
+            --bg-card: rgba(17, 24, 39, 0.75);
+            --bg-card-hover: rgba(30, 41, 59, 0.85);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --border-focus: rgba(99, 102, 241, 0.5);
+            --accent-primary: #6366f1;
+            --accent-glow: rgba(99, 102, 241, 0.25);
+            --accent-gradient: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --text-dim: #64748b;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --radius-lg: 16px;
+            --radius-md: 10px;
+            --radius-sm: 6px;
+            --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+            --glass-blur: blur(16px);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 15% 20%, rgba(99, 102, 241, 0.12) 0%, transparent 40%),
+                radial-gradient(circle at 85% 80%, rgba(168, 85, 247, 0.1) 0%, transparent 40%);
+        }
+
+        /* Header */
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 18px 36px;
+            background: rgba(10, 14, 23, 0.8);
+            backdrop-filter: var(--glass-blur);
+            border-bottom: 1px solid var(--border-color);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .brand-logo {
+            width: 40px;
+            height: 40px;
+            background: var(--accent-gradient);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 20px var(--accent-glow);
+        }
+
+        .brand-logo svg {
+            width: 22px;
+            height: 22px;
+            fill: #fff;
+        }
+
+        .brand-text h1 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, #fff 0%, #cbd5e1 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .brand-text span {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            border-radius: 20px;
+            font-size: 0.8rem;
+            color: var(--success);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--success);
+            box-shadow: 0 0 10px var(--success);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.85); }
+        }
+
+        /* Layout Grid */
+        main {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 360px 1fr;
+            gap: 24px;
+            padding: 24px 36px;
+            max-width: 1600px;
+            width: 100%;
+            margin: 0 auto;
+        }
+
+        /* Sidebar: Documents & Knowledge Base */
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .panel-card {
+            background: var(--bg-card);
+            backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 20px;
+            box-shadow: var(--shadow);
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .panel-title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        .panel-title span {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            font-weight: 400;
+        }
+
+        /* Upload Dropzone */
+        .dropzone {
+            border: 2px dashed rgba(99, 102, 241, 0.35);
+            border-radius: var(--radius-md);
+            padding: 24px 16px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            background: rgba(99, 102, 241, 0.03);
+        }
+
+        .dropzone:hover, .dropzone.dragover {
+            border-color: var(--accent-primary);
+            background: rgba(99, 102, 241, 0.08);
+            transform: translateY(-2px);
+        }
+
+        .dropzone svg {
+            width: 32px;
+            height: 32px;
+            stroke: var(--accent-primary);
+            fill: none;
+            margin-bottom: 8px;
+        }
+
+        .dropzone p {
+            font-size: 0.85rem;
+            color: var(--text-main);
+            margin-bottom: 4px;
+        }
+
+        .dropzone small {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        /* Document List */
+        .doc-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-height: 280px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+
+        .doc-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 14px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            transition: all 0.2s ease;
+        }
+
+        .doc-item:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(99, 102, 241, 0.3);
+        }
+
+        .doc-info {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .doc-name {
+            font-size: 0.85rem;
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 200px;
+        }
+
+        .doc-chunks {
+            font-size: 0.72rem;
+            color: var(--text-dim);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .btn-delete-doc {
+            background: none;
+            border: none;
+            color: var(--text-dim);
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 4px;
+            transition: color 0.2s ease;
+        }
+
+        .btn-delete-doc:hover {
+            color: var(--danger);
+        }
+
+        .empty-docs {
+            text-align: center;
+            padding: 20px 0;
+            color: var(--text-dim);
+            font-size: 0.85rem;
+        }
+
+        /* Settings Card */
+        .setting-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.85rem;
+        }
+
+        .setting-label {
+            color: var(--text-muted);
+        }
+
+        .toggle-group {
+            display: flex;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: var(--radius-sm);
+            padding: 2px;
+            border: 1px solid var(--border-color);
+        }
+
+        .toggle-btn {
+            padding: 4px 10px;
+            border: none;
+            background: none;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            font-family: inherit;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+        }
+
+        .toggle-btn.active {
+            background: var(--accent-primary);
+            color: #fff;
+            font-weight: 600;
+            box-shadow: 0 0 10px var(--accent-glow);
+        }
+
+        .slider-val {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--accent-primary);
+            margin-left: 8px;
+        }
+
+        /* Main Workspace: Chat & Inspector */
+        .chat-section {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            height: calc(100vh - 130px);
+        }
+
+        .chat-container {
+            flex: 1;
+            background: var(--bg-card);
+            backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 24px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .message {
+            display: flex;
+            gap: 14px;
+            max-width: 88%;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.user {
+            align-self: flex-end;
+            flex-direction: row-reverse;
+        }
+
+        .avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.85rem;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .message.user .avatar {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+
+        .message.assistant .avatar {
+            background: var(--accent-gradient);
+            color: #fff;
+            box-shadow: 0 0 15px var(--accent-glow);
+        }
+
+        .bubble {
+            padding: 14px 18px;
+            border-radius: 14px;
+            font-size: 0.92rem;
+            line-height: 1.6;
+        }
+
+        .message.user .bubble {
+            background: var(--accent-primary);
+            color: #fff;
+            border-bottom-right-radius: 2px;
+        }
+
+        .message.assistant .bubble {
+            background: rgba(30, 41, 59, 0.7);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            border-bottom-left-radius: 2px;
+            width: 100%;
+        }
+
+        /* Citations & Eval Inside Bubble */
+        .citation-box {
+            margin-top: 14px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .citation-title {
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--accent-primary);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .citation-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 10px;
+            margin-top: 4px;
+        }
+
+        .c-card {
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            padding: 10px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .c-card:hover {
+            border-color: var(--accent-primary);
+            background: rgba(30, 41, 59, 0.9);
+            transform: translateY(-2px);
+        }
+
+        .c-header {
+            display: flex;
+            justify-content: space-between;
+            font-weight: 600;
+            color: #cbd5e1;
+            margin-bottom: 4px;
+        }
+
+        .c-score {
+            color: var(--success);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+        }
+
+        .c-snippet {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            line-height: 1.4;
+            max-height: 52px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+        }
+
+        /* Evaluation Score Card */
+        .eval-card {
+            margin-top: 12px;
+            padding: 10px 14px;
+            background: rgba(99, 102, 241, 0.06);
+            border: 1px solid rgba(99, 102, 241, 0.2);
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            gap: 12px;
+            font-size: 0.78rem;
+        }
+
+        .eval-metric {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+        }
+
+        .eval-metric-val {
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--text-main);
+        }
+
+        .eval-metric-name {
+            color: var(--text-dim);
+            font-size: 0.7rem;
+        }
+
+        /* Chat Input Bar */
+        .chat-input-bar {
+            padding: 18px 24px;
+            background: rgba(15, 23, 42, 0.85);
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .chat-input-bar input {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 14px 18px;
+            color: #fff;
+            font-size: 0.95rem;
+            font-family: inherit;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        .chat-input-bar input:focus {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 15px var(--accent-glow);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .btn-send {
+            background: var(--accent-gradient);
+            border: none;
+            border-radius: var(--radius-md);
+            color: #fff;
+            padding: 14px 22px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            font-family: inherit;
+            cursor: pointer;
+            box-shadow: 0 0 20px var(--accent-glow);
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-send:hover {
+            transform: scale(1.02);
+            box-shadow: 0 0 25px rgba(99, 102, 241, 0.45);
+        }
+
+        .btn-send:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="brand">
+            <div class="brand-logo">
+                <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+            </div>
+            <div class="brand-text">
+                <h1>Document RAG Engine</h1>
+                <span>Studio Khai Thác Tri Thức Tài Liệu Độc Lập</span>
+            </div>
+        </div>
+        <div class="header-actions">
+            <div class="status-badge">
+                <div class="status-dot"></div>
+                <span id="serviceStatus">Đang kết nối...</span>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <!-- Upload Panel -->
+            <div class="panel-card">
+                <div class="panel-title">
+                    <span>Nạp Tài Liệu Số</span>
+                    <small>PDF, DOCX, XLSX, OCR JSON</small>
+                </div>
+                <div class="dropzone" id="dropzone">
+                    <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <p>Kéo thả tệp vào đây hoặc <strong>nhấp để chọn</strong></p>
+                    <small>Tự động bóc tách cấu trúc cha - con</small>
+                    <input type="file" id="fileInput" accept=".pdf,.docx,.doc,.xlsx,.xls,.json">
+                </div>
+                <div id="uploadProgress" style="display:none; font-size: 0.8rem; color: var(--accent-primary); text-align: center;">
+                    Đang phân đoạn và trích xuất vector...
+                </div>
+            </div>
+
+            <!-- Documents List Panel -->
+            <div class="panel-card" style="flex: 1;">
+                <div class="panel-title">
+                    <span>Kho Tri Thức Hiện Có</span>
+                    <button id="btnRefreshDocs" style="background:none; border:none; color:var(--accent-primary); cursor:pointer; font-size:0.75rem;">Làm mới</button>
+                </div>
+                <div class="doc-list" id="docList">
+                    <div class="empty-docs">Đang tải danh sách tài liệu...</div>
+                </div>
+                <button id="btnClearAll" style="background:rgba(239, 68, 68, 0.1); border:1px solid rgba(239, 68, 68, 0.3); color:var(--danger); padding:8px; border-radius:var(--radius-sm); cursor:pointer; font-size:0.8rem; font-family:inherit;">
+                    Dọn Sạch Kho Tri Thức
+                </button>
+            </div>
+
+            <!-- Settings Panel -->
+            <div class="panel-card">
+                <div class="panel-title">
+                    <span>Cấu Hình Suy Luận</span>
+                </div>
+                <div class="setting-row">
+                    <span class="setting-label">Chế độ:</span>
+                    <div class="toggle-group">
+                        <button class="toggle-btn active" id="btnModeFast" onclick="setMode('fast')">Fast</button>
+                        <button class="toggle-btn" id="btnModeThinking" onclick="setMode('thinking')">Thinking</button>
+                    </div>
+                </div>
+                <div class="setting-row">
+                    <span class="setting-label">Số trích dẫn (Top-K):</span>
+                    <div style="display: flex; align-items: center;">
+                        <input type="range" id="topKSlider" min="2" max="10" value="4" oninput="updateTopK(this.value)" style="width: 100px;">
+                        <span class="slider-val" id="topKVal">4</span>
+                    </div>
+                </div>
+                <div class="setting-row">
+                    <span class="setting-label">Đánh giá RAG Triad:</span>
+                    <input type="checkbox" id="evalCheckbox" checked style="accent-color: var(--accent-primary);">
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Chat Section -->
+        <section class="chat-section">
+            <div class="chat-container">
+                <div class="chat-messages" id="chatMessages">
+                    <div class="message assistant">
+                        <div class="avatar">AI</div>
+                        <div class="bubble">
+                            Xin chào! Tôi là trợ lý RAG Engine. Bạn có thể nạp các tài liệu số (PDF, Word, Excel hoặc kết quả JSON từ OCR Engine) ở cột bên trái và đặt câu hỏi để tôi trích xuất tri thức chính xác kèm nguồn dẫn chứng.
+                        </div>
+                    </div>
+                </div>
+                <div class="chat-input-bar">
+                    <input type="text" id="queryInput" placeholder="Nhập câu hỏi cần tra cứu trong tài liệu..." autocomplete="off">
+                    <button class="btn-send" id="btnSend">
+                        <span>Gửi</span>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                    </button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        let currentMode = "fast";
+        let topK = 4;
+        const chatMessages = document.getElementById("chatMessages");
+        const queryInput = document.getElementById("queryInput");
+        const btnSend = document.getElementById("btnSend");
+        const docList = document.getElementById("docList");
+        const dropzone = document.getElementById("dropzone");
+        const fileInput = document.getElementById("fileInput");
+        const uploadProgress = document.getElementById("uploadProgress");
+
+        // Health check
+        async function checkHealth() {
+            try {
+                const res = await fetch("/health");
+                if (res.ok) {
+                    document.getElementById("serviceStatus").innerText = "Sẵn sàng (Online)";
+                } else {
+                    document.getElementById("serviceStatus").innerText = "Lỗi kết nối";
+                }
+            } catch (e) {
+                document.getElementById("serviceStatus").innerText = "Ngoại tuyến";
+            }
+        }
+
+        // Fetch documents
+        async function loadDocuments() {
+            try {
+                const res = await fetch("/rag/documents");
+                const data = await res.json();
+                const docs = data.documents || [];
+                if (docs.length === 0) {
+                    docList.innerHTML = '<div class="empty-docs">Kho chưa có tài liệu nào.</div>';
+                    return;
+                }
+                docList.innerHTML = docs.map(d => `
+                    <div class="doc-item">
+                        <div class="doc-info">
+                            <span class="doc-name" title="${d.file_name}">${d.file_name}</span>
+                            <span class="doc-chunks">${d.chunk_count} chunks</span>
+                        </div>
+                        <button class="btn-delete-doc" onclick="deleteDocument('${d.file_name}')" title="Xóa tài liệu">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                        </button>
+                    </div>
+                `).join("");
+            } catch (e) {
+                docList.innerHTML = '<div class="empty-docs">Không thể tải danh sách tài liệu.</div>';
+            }
+        }
+
+        async function deleteDocument(name) {
+            if (!confirm(`Bạn có chắc muốn xóa tài liệu '${name}'?`)) return;
+            try {
+                await fetch(`/rag/documents/${encodeURIComponent(name)}`, { method: "DELETE" });
+                loadDocuments();
+            } catch (e) {
+                alert("Lỗi khi xóa tài liệu.");
+            }
+        }
+
+        document.getElementById("btnClearAll").onclick = async () => {
+            if (!confirm("CẢNH BÁO: Thao tác này sẽ xóa toàn bộ kho tri thức. Bạn có chắc không?")) return;
+            try {
+                await fetch("/rag/documents", { method: "DELETE" });
+                loadDocuments();
+            } catch (e) {
+                alert("Lỗi khi xóa kho tri thức.");
+            }
+        };
+
+        document.getElementById("btnRefreshDocs").onclick = loadDocuments;
+
+        // Upload Handling
+        dropzone.onclick = () => fileInput.click();
+        dropzone.ondragover = (e) => { e.preventDefault(); dropzone.classList.add("dragover"); };
+        dropzone.ondragleave = () => dropzone.classList.remove("dragover");
+        dropzone.ondrop = (e) => {
+            e.preventDefault();
+            dropzone.classList.remove("dragover");
+            if (e.dataTransfer.files.length > 0) handleFileUpload(e.dataTransfer.files[0]);
+        };
+        fileInput.onchange = (e) => {
+            if (e.target.files.length > 0) handleFileUpload(e.target.files[0]);
+        };
+
+        async function handleFileUpload(file) {
+            const formData = new FormData();
+            formData.append("file", file);
+            uploadProgress.style.display = "block";
+            try {
+                const res = await fetch("/rag/index", {
+                    method: "POST",
+                    body: formData
+                });
+                const result = await res.json();
+                if (res.ok) {
+                    alert(`Nạp thành công '${result.file_name}': ${result.chunks_indexed} chunks.`);
+                    loadDocuments();
+                } else {
+                    alert(`Lỗi nạp file: ${result.detail || "Không xác định"}`);
+                }
+            } catch (e) {
+                alert("Không thể kết nối đến máy chủ khi nạp tệp.");
+            } finally {
+                uploadProgress.style.display = "none";
+                fileInput.value = "";
+            }
+        }
+
+        // Mode and Top-K controls
+        function setMode(mode) {
+            currentMode = mode;
+            document.getElementById("btnModeFast").classList.toggle("active", mode === "fast");
+            document.getElementById("btnModeThinking").classList.toggle("active", mode === "thinking");
+        }
+
+        function updateTopK(val) {
+            topK = parseInt(val);
+            document.getElementById("topKVal").innerText = val;
+        }
+
+        // Chat flow
+        btnSend.onclick = sendMessage;
+        queryInput.onkeydown = (e) => { if (e.key === "Enter") sendMessage(); };
+
+        async function sendMessage() {
+            const text = queryInput.value.trim();
+            if (!text) return;
+
+            // Render User message
+            appendMessage("user", text);
+            queryInput.value = "";
+            btnSend.disabled = true;
+
+            // Create Assistant message placeholder
+            const assistantElem = appendMessage("assistant", "Đang truy xuất và đối chiếu tài liệu...");
+            const bubble = assistantElem.querySelector(".bubble");
+
+            try {
+                const isEval = document.getElementById("evalCheckbox").checked;
+                const res = await fetch("/rag/query", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        query: text,
+                        top_k: topK,
+                        mode: currentMode,
+                        evaluate: isEval
+                    })
+                });
+
+                const data = await res.json();
+                let html = `<div>${data.answer}</div>`;
+
+                if (data.citations && data.citations.length > 0) {
+                    html += `
+                        <div class="citation-box">
+                            <div class="citation-title">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                                Trích Dẫn Nguồn (${data.citations.length} Đoạn)
+                            </div>
+                            <div class="citation-cards">
+                                ${data.citations.map(c => `
+                                    <div class="c-card" title="${c.text_snippet}">
+                                        <div class="c-header">
+                                            <span>${c.doc_name} (${c.location_label})</span>
+                                            <span class="c-score">${Math.round(c.score * 100)}%</span>
+                                        </div>
+                                        <div class="c-snippet">${c.text_snippet}</div>
+                                    </div>
+                                `).join("")}
+                            </div>
+                        </div>
+                    `;
+                }
+
+                if (data.evaluation) {
+                    const ev = data.evaluation;
+                    html += `
+                        <div class="eval-card">
+                            <div class="eval-metric">
+                                <span class="eval-metric-val">${Math.round(ev.context_relevance * 100)}%</span>
+                                <span class="eval-metric-name">Context Relevance</span>
+                            </div>
+                            <div class="eval-metric">
+                                <span class="eval-metric-val" style="color: ${ev.groundedness >= 0.7 ? 'var(--success)' : 'var(--danger)'};">${Math.round(ev.groundedness * 100)}%</span>
+                                <span class="eval-metric-name">Groundedness</span>
+                            </div>
+                            <div class="eval-metric">
+                                <span class="eval-metric-val">${Math.round(ev.answer_relevance * 100)}%</span>
+                                <span class="eval-metric-name">Answer Relevance</span>
+                            </div>
+                            <div class="eval-metric">
+                                <span class="eval-metric-val" style="color: var(--accent-primary);">${Math.round(ev.overall_score * 100)}%</span>
+                                <span class="eval-metric-name">Overall Score</span>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                bubble.innerHTML = html;
+            } catch (err) {
+                bubble.innerHTML = `<span style="color:var(--danger)">Lỗi kết nối khi gửi câu hỏi: ${err.message}</span>`;
+            } finally {
+                btnSend.disabled = false;
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+        }
+
+        function appendMessage(role, text) {
+            const msg = document.createElement("div");
+            msg.className = `message ${role}`;
+            msg.innerHTML = `
+                <div class="avatar">${role === "user" ? "BẠN" : "AI"}</div>
+                <div class="bubble">${text}</div>
+            `;
+            chatMessages.appendChild(msg);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            return msg;
+        }
+
+        // Init
+        checkHealth();
+        loadDocuments();
+    </script>
+</body>
+</html>
