@@ -10,75 +10,11 @@ from src.chunking.chunker import StructureAwareChunker
 from src.embeddings.embedding_provider import BaseEmbeddingProvider
 from src.generation.llm_provider import BaseLLMProvider
 from src.retrieval.vector_store import VectorStoreManager
-from src.retrieval.retriever import HybridRetriever
+from src.retrieval.retriever import HybridRetriever, OkapiBM25Scorer
 from src.pipeline.rag_pipeline import DocumentRAGPipeline
 
 
-class MockEmbeddingProvider(BaseEmbeddingProvider):
-    """Deterministic mock embedding for fast offline unit tests."""
 
-    @property
-    def dimension(self) -> int:
-        return 4
-
-    @property
-    def model_name(self) -> str:
-        return "mock-embed"
-
-    def embed_query(self, text: str) -> List[float]:
-        # Hash text to 4 floats
-        h = sum(ord(c) for c in text)
-        return [float((h * (i + 1)) % 10) / 10.0 for i in range(4)]
-
-    def embed_documents(self, texts: List[str]) -> List[List[float]]:
-        return [self.embed_query(t) for t in texts]
-
-
-class MockLLMProvider(BaseLLMProvider):
-    """Deterministic mock LLM for testing pipeline answers."""
-
-    def __init__(self):
-        self.last_prompt = ""
-        self.last_system_prompt = ""
-
-    @property
-    def model_name(self) -> str:
-        return "mock-llm"
-
-    def generate(self, prompt: str, system_prompt: Optional[str] = None) -> str:
-        self.last_prompt = prompt
-        self.last_system_prompt = system_prompt or ""
-        return "Câu trả lời thử nghiệm từ Mock LLM dựa trên tài liệu."
-
-    def stream(self, prompt: str, system_prompt: Optional[str] = None) -> Generator[str, None, None]:
-        self.last_prompt = prompt
-        self.last_system_prompt = system_prompt or ""
-        for token in ["Câu ", "trả ", "lời ", "thử ", "nghiệm."]:
-            yield token
-
-
-@pytest.fixture
-def rag_pipeline(tmp_path):
-    v_store = VectorStoreManager(
-        persist_directory=str(tmp_path / "chroma"),
-        collection_name="test_collection"
-    )
-    emb = MockEmbeddingProvider()
-    llm = MockLLMProvider()
-    retriever = HybridRetriever(
-        vector_store=v_store,
-        embedding_provider=emb,
-        coarse_k=4,
-        top_k=2
-    )
-    chunker = StructureAwareChunker(parent_size=300, child_size=100)
-    return DocumentRAGPipeline(
-        embedding_provider=emb,
-        llm_provider=llm,
-        vector_store=v_store,
-        retriever=retriever,
-        chunker=chunker
-    )
 
 
 def test_full_pipeline_indexing_and_query(rag_pipeline):
@@ -184,4 +120,68 @@ def test_streaming_query(rag_pipeline):
     # Subsequent items are token strings
     tokens = list(generator)
     assert "".join(tokens) == "Câu trả lời thử nghiệm."
+
+
+def test_pipeline_document_management(rag_pipeline):
+    doc_a = IngestedDocument(
+        doc_id="doc_crud_1",
+        file_name="chinh_sach_a.pdf",
+        total_pages=1,
+        pages=[IngestedPage(page_number=1, text="Nội dung chính sách A", location_label="Trang 1")]
+    )
+    doc_b = IngestedDocument(
+        doc_id="doc_crud_2",
+        file_name="chinh_sach_b.pdf",
+        total_pages=1,
+        pages=[IngestedPage(page_number=1, text="Nội dung chính sách B", location_label="Trang 1")]
+    )
+
+    rag_pipeline.index_document(doc_a)
+    rag_pipeline.index_document(doc_b)
+
+    # 1. Test listing
+    docs = rag_pipeline.list_documents()
+    doc_names = [d["file_name"] for d in docs]
+    assert "chinh_sach_a.pdf" in doc_names
+    assert "chinh_sach_b.pdf" in doc_names
+
+    # 2. Test delete single document
+    del_res = rag_pipeline.delete_document("chinh_sach_a.pdf")
+    assert del_res is True
+    docs_after = rag_pipeline.list_documents()
+    doc_names_after = [d["file_name"] for d in docs_after]
+    assert "chinh_sach_a.pdf" not in doc_names_after
+    assert "chinh_sach_b.pdf" in doc_names_after
+
+    # 3. Test clear all documents
+    clear_res = rag_pipeline.clear_all_documents()
+    assert clear_res is True
+    assert len(rag_pipeline.list_documents()) == 0
+
+
+def test_okapi_bm25_scorer():
+    scorer = OkapiBM25Scorer(k1=1.5, b=0.75)
+    corpus = [
+        "Quy chế nghỉ phép năm của nhân viên là 12 ngày.",
+        "Hướng dẫn cài đặt môi trường lập trình Python và Docker.",
+        "Chế độ công tác phí và định mức thanh toán khi đi công tác nước ngoài."
+    ]
+    metas = [
+        {"location_label": "Trang 1 - Nghỉ phép"},
+        {"location_label": "Trang 2 - Kỹ thuật"},
+        {"location_label": "Trang 3 - Tài chính"}
+    ]
+
+    # Query matching doc 0
+    scores = scorer.score_corpus("nghỉ phép nhân viên", corpus, metas)
+    assert len(scores) == 3
+    assert scores[0] > scores[1]
+    assert scores[0] > scores[2]
+    assert 0.0 <= scores[0] <= 1.0
+
+    # Query with empty result
+    empty_scores = scorer.score_corpus("từ_khóa_hoàn_toàn_không_có", corpus, metas)
+    assert all(s == 0.0 for s in empty_scores)
+
+
 

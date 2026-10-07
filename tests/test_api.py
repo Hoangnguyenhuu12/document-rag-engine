@@ -19,6 +19,13 @@ def test_health_endpoint():
     assert resp.json()["service"] == "document-rag-engine"
 
 
+def test_ui_endpoint():
+    resp = client.get("/ui")
+    assert resp.status_code == 200
+    assert "Document RAG Engine" in resp.text
+
+
+
 def test_index_ocr_endpoint():
     mock_pipeline = MagicMock()
     mock_pipeline.index_ocr_json.return_value = {
@@ -108,3 +115,49 @@ def test_stream_endpoint():
         assert "huong_dan.pdf" in body
         assert "event: token" in body
         assert "event: done" in body
+
+
+def test_list_documents_endpoint():
+    mock_pipeline = MagicMock()
+    mock_pipeline.list_documents.return_value = [
+        {"file_name": "chinh_sach.pdf", "chunk_count": 5},
+        {"file_name": "bao_cao.docx", "chunk_count": 8}
+    ]
+
+    with patch("api.main.get_pipeline", return_value=mock_pipeline):
+        resp = client.get("/rag/documents")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total_documents"] == 2
+        assert data["documents"][0]["file_name"] == "chinh_sach.pdf"
+
+
+def test_delete_document_endpoint():
+    mock_pipeline = MagicMock()
+    mock_pipeline.delete_document.return_value = True
+
+    with patch("api.main.get_pipeline", return_value=mock_pipeline):
+        resp = client.delete("/rag/documents/chinh_sach.pdf")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "success"
+        mock_pipeline.delete_document.assert_called_once_with("chinh_sach.pdf")
+
+    # Test not found
+    mock_pipeline.delete_document.return_value = False
+    with patch("api.main.get_pipeline", return_value=mock_pipeline):
+        resp = client.delete("/rag/documents/khong_ton_tai.pdf")
+        assert resp.status_code == 404
+
+
+def test_clear_documents_endpoint():
+    mock_pipeline = MagicMock()
+    mock_pipeline.clear_all_documents.return_value = True
+
+    with patch("api.main.get_pipeline", return_value=mock_pipeline):
+        resp = client.delete("/rag/documents")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "success"
+        mock_pipeline.clear_all_documents.assert_called_once()
+
