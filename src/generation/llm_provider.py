@@ -88,7 +88,7 @@ class OllamaLLMProvider(BaseLLMProvider):
 
 
 class GeminiLLMProvider(BaseLLMProvider):
-    """Google Gemini LLM provider."""
+    """Google Gemini LLM provider using official google.genai SDK with legacy fallback."""
 
     def __init__(
         self,
@@ -99,9 +99,18 @@ class GeminiLLMProvider(BaseLLMProvider):
         self.api_key = api_key or os.getenv("GEMINI_API_KEY", "")
         self._model = model
         self.temperature = temperature
+        self._client = None
         if self.api_key:
-            import google.generativeai as genai
-            genai.configure(api_key=self.api_key)
+            try:
+                from google import genai
+                from google.genai import types
+                self._client = genai.Client(api_key=self.api_key, http_options=types.HttpOptions(timeout=10000))
+            except Exception:
+                try:
+                    import google.generativeai as genai
+                    genai.configure(api_key=self.api_key)
+                except Exception:
+                    pass
 
     @property
     def model_name(self) -> str:
@@ -109,30 +118,69 @@ class GeminiLLMProvider(BaseLLMProvider):
 
     def generate(self, prompt: str, system_prompt: Optional[str] = None) -> str:
         try:
-            import google.generativeai as genai
-            model = genai.GenerativeModel(
-                model_name=self._model,
-                system_instruction=system_prompt,
-                generation_config={"temperature": self.temperature}
-            )
-            resp = model.generate_content(prompt)
-            return resp.text
+            if self._client is not None:
+                from google.genai import types
+                cfg = types.GenerateContentConfig(
+                    system_instruction=system_prompt,
+                    temperature=self.temperature
+                ) if (system_prompt or self.temperature is not None) else None
+                resp = self._client.models.generate_content(
+                    model=self._model,
+                    contents=prompt,
+                    config=cfg
+                )
+                return resp.text or ""
+            else:
+                import google.generativeai as genai
+                model = genai.GenerativeModel(
+                    model_name=self._model,
+                    system_instruction=system_prompt,
+                    generation_config={"temperature": self.temperature}
+                )
+                resp = model.generate_content(prompt)
+                return resp.text or ""
         except Exception as exc:
+            try:
+                ollama = OllamaLLMProvider(model="deepseek-r1:8b")
+                return ollama.generate(prompt=prompt, system_prompt=system_prompt)
+            except Exception:
+                pass
             return f"Thông báo: Không thể kết nối với dịch vụ mô hình do vượt giới hạn định ngạch hoặc lỗi kết nối ({str(exc)[:100]}). Vui lòng kiểm tra khóa xác thực hoặc chuyển sang mô hình khác."
 
     def stream(self, prompt: str, system_prompt: Optional[str] = None) -> Generator[str, None, None]:
         try:
-            import google.generativeai as genai
-            model = genai.GenerativeModel(
-                model_name=self._model,
-                system_instruction=system_prompt,
-                generation_config={"temperature": self.temperature}
-            )
-            resp = model.generate_content(prompt, stream=True)
-            for chunk in resp:
-                if chunk.text:
-                    yield chunk.text
+            if self._client is not None:
+                from google.genai import types
+                cfg = types.GenerateContentConfig(
+                    system_instruction=system_prompt,
+                    temperature=self.temperature
+                ) if (system_prompt or self.temperature is not None) else None
+                for chunk in self._client.models.generate_content_stream(
+                    model=self._model,
+                    contents=prompt,
+                    config=cfg
+                ):
+                    if chunk.text:
+                        yield chunk.text
+            else:
+                import google.generativeai as genai
+                model = genai.GenerativeModel(
+                    model_name=self._model,
+                    system_instruction=system_prompt,
+                    generation_config={"temperature": self.temperature}
+                )
+                resp = model.generate_content(prompt, stream=True)
+                for chunk in resp:
+                    if chunk.text:
+                        yield chunk.text
         except Exception as exc:
+            try:
+                ollama = OllamaLLMProvider(model="deepseek-r1:8b")
+                for chunk in ollama.stream(prompt=prompt, system_prompt=system_prompt):
+                    yield chunk
+                return
+            except Exception:
+                pass
             yield f"Thông báo: Vượt giới hạn định ngạch hoặc gián đoạn kết nối mô hình ({str(exc)[:100]})."
 
 

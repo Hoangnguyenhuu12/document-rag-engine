@@ -26,27 +26,38 @@ from ..generation.llm_provider import BaseLLMProvider, LLMFactory
 from ..evaluation.rag_triad import RAGTriadEvaluator
 
 STRICT_RAG_SYSTEM_PROMPT = """\
-Bạn là trợ lý AI chuyên nghiệp về khai thác tri thức tài liệu (Document Intelligence Assistant).
-NHIỆM VỤ: Trả lời câu hỏi của người dùng DỰA HOÀN TOÀN VÀO CÁC ĐOẠN TRÍCH TÀI LIỆU ĐƯỢC CUNG CẤP DƯỚI ĐÂY.
+Bạn là trợ lý AI chuyên nghiệp về khai thác và phân tích tri thức tài liệu (Document Intelligence Assistant).
+NHIỆM VỤ: Trả lời câu hỏi của người dùng DỰA VÀO CÁC ĐOẠN TRÍCH TÀI LIỆU ĐƯỢC CUNG CẤP DƯỚI ĐÂY.
 
 NGUYÊN TẮC BẮT BUỘC:
-1. KHÔNG BỊA ĐẶT (ZERO HALLUCINATION): Tuyệt đối không suy diễn hoặc đưa ra thông tin không có trong tài liệu.
-2. NẾU THIẾU DỮ LIỆU: Nếu các đoạn trích không chứa đủ thông tin để trả lời, hãy nói rõ: "Tài liệu hiện có không chứa thông tin về câu hỏi này."
-3. NGÔN NGỮ ĐỒNG BỘ: Nếu tài liệu là tiếng Anh nhưng người dùng hỏi bằng tiếng Việt, hãy trả lời bằng tiếng Việt chính xác, mượt mà dựa trên tài liệu đó.
-4. TRẢ LỜI TRỰC DIỆN: Đi thẳng vào nội dung câu hỏi, nêu rõ các số liệu, căn cứ, điều khoản có trong tài liệu.
+1. CĂN CỨ VÀO TÀI LIỆU (GROUNDED IN CONTEXT): Mọi luận điểm, sự kiện và số liệu phải bắt nguồn từ các đoạn trích. Không bịa đặt thông tin không có cơ sở.
+2. XỬ LÝ YÊU CẦU TỔNG QUAN & TÓM TẮT (OVERVIEW & SUMMARY): Khi người dùng yêu cầu tóm tắt, tổng quan hoặc hỏi cuốn sách/tài liệu nói về điều gì:
+   - Hãy tổng hợp bức tranh chung mạch lạc dựa trên các đoạn trích (phần mở đầu, các chương mục, các luận điểm và thông điệp chính).
+   - Nêu rõ các chủ đề chính mà tài liệu đề cập, đối tượng hướng đến hoặc bài học cốt lõi.
+   - Không được từ chối chỉ vì các đoạn trích không chứa sẵn một bài tóm tắt mẫu.
+3. KHI THIẾU CHI TIẾT CỤ THỂ: Nếu các đoạn trích không chứa đủ chi tiết về một câu hỏi hẹp:
+   - Hãy nêu rõ tài liệu chưa cung cấp chi tiết đó, nhưng đồng thời tóm tắt những nội dung liên quan nhất mà tài liệu CÓ đề cập.
+   - Gợi ý cho người dùng những khía cạnh hoặc câu hỏi cụ thể có thể tra cứu tiếp từ tài liệu.
+4. PHẢN CHIẾU NGÔN NGỮ (LANGUAGE MIRRORING): Luôn trả lời đúng theo ngôn ngữ của câu hỏi người dùng (hỏi bằng Tiếng Anh thì trả lời hoàn toàn bằng Tiếng Anh, hỏi bằng Tiếng Việt thì trả lời bằng Tiếng Việt).
+5. GỢI Ý KHAI THÁC TIẾP (FOLLOW-UP SUGGESTIONS): Ở cuối câu trả lời, hãy đưa ra 2-3 câu hỏi cụ thể theo định dạng:
+GỢI Ý TRA CỨU TIẾP:
+- [Câu hỏi gợi ý 1]
+- [Câu hỏi gợi ý 2]
+- [Câu hỏi gợi ý 3]
 """
 
 THINKING_RAG_SYSTEM_PROMPT = """\
 Bạn là chuyên gia phân tích và suy luận tri thức tài liệu chuyên sâu (Deep Document Reasoning Assistant).
-NHIỆM VỤ: Trả lời câu hỏi của người dùng DỰA HOÀN TOÀN VÀO CÁC ĐOẠN TRÍCH TÀI LIỆU ĐƯỢC CUNG CẤP DƯỚI ĐÂY.
+NHIỆM VỤ: Trả lời câu hỏi của người dùng DỰA VÀO CÁC ĐOẠN TRÍCH TÀI LIỆU ĐƯỢC CUNG CẤP DƯỚI ĐÂY.
 
 NGUYÊN TẮC SUY LUẬN & TRẢ LỜI:
 1. SUY LUẬN CHUỖI TƯ DUY (CHAIN-OF-THOUGHT): Phân tích từng khía cạnh, đối chiếu chéo các điều khoản, bảng biểu liên quan trong tài liệu trước khi rút ra kết luận.
-2. KHÔNG BỊA ĐẶT (ZERO HALLUCINATION): Mọi luận điểm, số liệu phải có căn cứ rõ ràng từ các đoạn trích. Tuyệt đối không suy đoán ngoài phạm vi tài liệu.
-3. NẾU THIẾU THÔNG TIN: Hãy chỉ rõ phần nào tài liệu có đề cập và phần nào tài liệu chưa cung cấp.
-4. TRÍCH DẪN RÕ RÀNG: Ghi rõ căn cứ (Điều, Khoản, Mục, Bảng biểu) tương ứng với từng kết luận.
+2. CĂN CỨ TÀI LIỆU (GROUNDED IN CONTEXT): Mọi luận điểm, số liệu phải có căn cứ rõ ràng từ các đoạn trích. Không suy đoán ngoài phạm vi tài liệu.
+3. TỔNG HỢP TOÀN CẢNH (SYNTHESIS): Khi được hỏi tóm tắt hoặc tổng quan, hãy liên kết các luận điểm từ các đoạn trích để tạo nên bức tranh đầy đủ về tài liệu.
+4. TRÍCH DẪN RÕ RÀNG: Ghi rõ căn cứ (Điều, Khoản, Mục, Trang) tương ứng với từng kết luận.
+5. PHẢN CHIẾU NGÔN NGỮ (LANGUAGE MIRRORING): Luôn trả lời đúng theo ngôn ngữ câu hỏi người dùng.
+6. GỢI Ý KHAI THÁC TIẾP: Ở cuối câu trả lời, luôn đưa ra 2-3 câu hỏi gợi ý để người dùng hỏi sâu hơn.
 """
-
 
 class DocumentRAGPipeline:
     """Independent end-to-end RAG pipeline."""
@@ -182,24 +193,59 @@ class DocumentRAGPipeline:
         """Delete the entire collection and clear all documents."""
         return self.vector_store.clear_all_documents(self.embedding_provider.dimension)
 
+    @staticmethod
+    def _is_english(text: str) -> bool:
+        if not text:
+            return False
+        vi_chars = set("àáảãạăằắẳẵặâầấẩẫậđèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵ")
+        if any(c in vi_chars for c in text.lower()):
+            return False
+        en_words = {
+            "who", "what", "where", "when", "why", "how", "is", "are", "was", "were",
+            "the", "a", "an", "in", "on", "at", "to", "for", "of", "with", "by",
+            "can", "could", "should", "would", "do", "does", "did", "have", "has",
+            "you", "your", "i", "me", "my", "we", "our", "they", "them", "their",
+            "this", "that", "these", "those", "it", "its", "tell", "summarize",
+            "explain", "show", "list", "give", "help", "hello", "hi", "hey",
+            "thanks", "thank", "please", "document", "documents", "about",
+            "read", "find", "search", "name", "author", "content"
+        }
+        import re
+        tokens = set(re.findall(r"\b[a-zA-Z]+\b", text.lower()))
+        return len(tokens.intersection(en_words)) > 0
+
     def _build_prompt(self, query: str, citations: List[Citation], conversation_history: Optional[List[Dict[str, str]]] = None) -> str:
-        """Construct prompt with context blocks and optional chat history."""
+        """Construct prompt with context blocks and optional chat history with Language Mirroring."""
+        is_en = self._is_english(query)
         context_blocks = []
         for c in citations:
-            header = f"[Tài liệu: {c.doc_name} | Vị trí: {c.location_label}]"
+            loc_label = c.location_label
+            if is_en and loc_label:
+                loc_label = loc_label.replace("Trang", "Page").replace("Dòng", "Line").replace("Khối", "Block")
+            header = f"[Document: {c.doc_name} | Location: {loc_label}]" if is_en else f"[Tài liệu: {c.doc_name} | Vị trí: {c.location_label}]"
             context_blocks.append(f"{header}\n{c.text_snippet}")
 
-        context_str = "\n\n---\n\n".join(context_blocks) if context_blocks else "Không tìm thấy đoạn trích phù hợp."
+        not_found_str = "No relevant document passages found." if is_en else "Không tìm thấy đoạn trích phù hợp."
+        context_str = "\n\n---\n\n".join(context_blocks) if context_blocks else not_found_str
 
         history_str = ""
         if conversation_history:
             hist_lines = []
             for msg in conversation_history:
-                role = "Người dùng" if msg.get("role") in ("user", "human") else "Trợ lý"
+                role = ("User" if msg.get("role") in ("user", "human") else "Assistant") if is_en else ("Người dùng" if msg.get("role") in ("user", "human") else "Trợ lý")
                 content = msg.get("content", "")
                 hist_lines.append(f"{role}: {content}")
             if hist_lines:
-                history_str = "LỊCH SỬ HỘI THOẠI TRƯỚC ĐÓ:\n" + "\n".join(hist_lines) + "\n\n"
+                hist_header = "CONVERSATION HISTORY:\n" if is_en else "LỊCH SỬ HỘI THOẠI TRƯỚC ĐÓ:\n"
+                history_str = hist_header + "\n".join(hist_lines) + "\n\n"
+
+        if is_en:
+            return (
+                f"DOCUMENT CONTEXT:\n\n{context_str}\n\n"
+                f"{history_str}"
+                f"QUESTION: {query}\n\n"
+                f"ANSWER (Respond concisely and accurately in ENGLISH based strictly on the document context above):"
+            )
 
         return (
             f"NGỮ CẢNH TÀI LIỆU:\n\n{context_str}\n\n"

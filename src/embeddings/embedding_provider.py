@@ -74,7 +74,7 @@ class OllamaEmbeddingProvider(BaseEmbeddingProvider):
 
 
 class GeminiEmbeddingProvider(BaseEmbeddingProvider):
-    """Google Gemini embedding provider with auto-retry."""
+    """Google Gemini embedding provider using official google.genai SDK with legacy fallback."""
 
     def __init__(
         self,
@@ -85,9 +85,17 @@ class GeminiEmbeddingProvider(BaseEmbeddingProvider):
         self.api_key = api_key or os.getenv("GEMINI_API_KEY", "")
         self._model = model
         self._dim = dimension
+        self._client = None
         if self.api_key:
-            import google.generativeai as genai
-            genai.configure(api_key=self.api_key)
+            try:
+                from google import genai
+                self._client = genai.Client(api_key=self.api_key)
+            except Exception:
+                try:
+                    import google.generativeai as genai
+                    genai.configure(api_key=self.api_key)
+                except Exception:
+                    pass
 
     @property
     def dimension(self) -> int:
@@ -98,6 +106,15 @@ class GeminiEmbeddingProvider(BaseEmbeddingProvider):
         return self._model
 
     def embed_query(self, text: str) -> List[float]:
+        if self._client is not None:
+            from google.genai import types
+            cfg = types.EmbedContentConfig(output_dimensionality=self._dim) if self._dim else None
+            res = self._client.models.embed_content(
+                model=self._model,
+                contents=text,
+                config=cfg
+            )
+            return res.embeddings[0].values
         import google.generativeai as genai
         res = genai.embed_content(
             model=self._model,
@@ -108,6 +125,15 @@ class GeminiEmbeddingProvider(BaseEmbeddingProvider):
         return res["embedding"]
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        if self._client is not None:
+            from google.genai import types
+            cfg = types.EmbedContentConfig(output_dimensionality=self._dim) if self._dim else None
+            res = self._client.models.embed_content(
+                model=self._model,
+                contents=texts,
+                config=cfg
+            )
+            return [e.values for e in res.embeddings]
         import google.generativeai as genai
         res = genai.embed_content(
             model=self._model,
